@@ -1,5 +1,6 @@
 const express = require('express');
 const { nanoid } = require('nanoid');
+const jwt = require("jsonwebtoken");
 const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
 const bcrypt = require("bcrypt");
@@ -26,6 +27,10 @@ const swaggerOptions = {
 
 const swaggerSpec = swaggerJsdoc(swaggerOptions);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
+const JWT_SECRET = "access_secret";
+// Время жизни токена
+const ACCESS_EXPIRES_IN = "15m";
 
 /**
  * @swagger
@@ -96,7 +101,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 let products = [
     {
-        id: nanoid(6),
+        id: "123456",
         category: "Наушники",
         description: "Отличные наушники с активным шумоподавлением",
         name: 'AirPods',
@@ -180,6 +185,27 @@ let products = [
 // Middleware для парсинга JSON
 app.use(express.json());
 
+function authMiddleware(req, res, next) {
+    const header = req.headers.authorization || "";
+    // Ожидаем формат: Bearer <token>
+    const [scheme, token] = header.split(" ");
+    if (scheme !== "Bearer" || !token) {
+        return res.status(401).json({
+            error: "Missing or invalid Authorization header",
+        });
+    }
+    try {
+        const payload = jwt.verify(token, JWT_SECRET);
+        // сохраняем данные токена в req
+        req.user = payload;
+        next();
+    } catch (err) {
+        return res.status(401).json({
+            error: "Invalid or expired token",
+        });
+    }
+}
+
 let users = [];
 
 function findUserOr404(email, res) {
@@ -194,10 +220,6 @@ function findUserOr404(email, res) {
 async function hashPassword(password) {
     const rounds = 10;
     return bcrypt.hash(password, rounds);
-}
-
-async function verifyPassword(password, passwordHash) {
-    return bcrypt.compare(password, passwordHash);
 }
 
 /**
@@ -305,20 +327,49 @@ app.post("/auth/register", async (req, res) => {
 app.post("/auth/login", async (req, res) => {
     const { email, password } = req.body;
     if (!email || !password) {
-        return res.status(400).json({ error: "email and password are required" });
-        }
-        const user = findUserOr404(email, res);
-        if (!user) return;
-        const isAuthentethicated = await verifyPassword(password, user.hashedPassword);
-        if (isAuthentethicated)
+        return res.status(400).json({
+            error: "email and password are required",
+        });
+    }
+    const user = findUserOr404(email, res)
+    const isValid = await bcrypt.compare(password, user.hashedPassword);
+    if (!isValid) {
+        return res.status(401).json({
+            error: "Invalid credentials",
+        });
+    }
+// Создание access-токена
+    const accessToken = jwt.sign(
         {
-            res.status(200).json({ login: true });
-        }
-        else
+            sub: user.id,
+            username: user.email,
+        },
+        JWT_SECRET,
         {
-            res.status(401).json({ error: "not authentethicated" })
+            expiresIn: ACCESS_EXPIRES_IN,
         }
+    );
+    res.json({
+        accessToken,
     });
+});
+
+app.get("/auth/me", authMiddleware, (req, res) => {
+    // sub мы положили в токен при login
+    const userId = req.user.sub;
+    const user = users.find(u => u.id === userId);
+    if (!user) {
+        return res.status(404).json({
+            error: "User not found",
+        });
+    }
+    // никогда не возвращаем passwordHash
+    res.json({
+        id: user.id,
+        username: user.email,
+    });
+});
+
 
 // Middleware для логирования запросов
 app.use((req, res, next) => {
@@ -420,7 +471,7 @@ app.get('/products', (req, res) => {
  *       404:
  *         description: Товар не найден
  *
- *   patch:
+ *   put:
  *     summary: Обновляет данные товара
  *     tags: [Products]
  *     parameters:
@@ -459,13 +510,14 @@ app.get('/products', (req, res) => {
  *         description: Товар не найден
  */
 
-app.get('/products/:id', (req, res) => {
+app.get('/products/:id', authMiddleware, (req, res) => {
     const id = req.params.id;
     const product = findProductOr404(id, res);
     if (!product) return;
     res.json(product);
 });
-app.patch('/products/:id', (req, res) => {
+app.put('/products/:id', authMiddleware, (req, res) => {
+
     const id = req.params.id;
     const product = findProductOr404(id, res);
     if (!product) return;
@@ -473,7 +525,7 @@ app.patch('/products/:id', (req, res) => {
     // Проверяем наличие хотя бы одного поля для обновления
     const { name, cost, category, description, quantity } = req.body;
 
-    if (!name && !cost && !category && !description && quantity === undefined) {
+    if (!name && cost === undefined && !category && !description && quantity === undefined) {
         return res.status(400).json({ error: "Nothing to update" });
     }
 
@@ -486,7 +538,7 @@ app.patch('/products/:id', (req, res) => {
 
     res.json(product);
 });
-app.delete('/products/:id', (req, res) => {
+app.delete('/products/:id', authMiddleware, (req, res) => {
     const id = req.params.id;
     const exists = products.some((p) => p.id === id);
     if (!exists) return res.status(404).json({ error: "product not found" });
