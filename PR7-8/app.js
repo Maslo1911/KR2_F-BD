@@ -4,8 +4,15 @@ const jwt = require("jsonwebtoken");
 const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
 const bcrypt = require("bcrypt");
+const cors = require("cors");
 const app = express();
 const port = 3000;
+
+app.use(cors({
+    origin: "http://localhost:3001",
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+}));
 
 const swaggerOptions = {
     definition: {
@@ -332,6 +339,7 @@ app.post("/auth/login", async (req, res) => {
         });
     }
     const user = findUserOr404(email, res)
+    if (!user) return;
     const isValid = await bcrypt.compare(password, user.hashedPassword);
     if (!isValid) {
         return res.status(401).json({
@@ -351,6 +359,12 @@ app.post("/auth/login", async (req, res) => {
     );
     res.json({
         accessToken,
+        user: {
+            id: user.id,
+            username: user.email,
+            first_name: user.first_name,
+            last_name: user.last_name
+        }
     });
 });
 
@@ -366,6 +380,8 @@ app.get("/auth/me", authMiddleware, (req, res) => {
     // никогда не возвращаем passwordHash
     res.json({
         id: user.id,
+        first_name: user.first_name,
+        last_name: user.last_name,
         username: user.email,
     });
 });
