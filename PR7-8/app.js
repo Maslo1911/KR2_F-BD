@@ -35,9 +35,11 @@ const swaggerOptions = {
 const swaggerSpec = swaggerJsdoc(swaggerOptions);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
-const JWT_SECRET = "access_secret";
+const ACCESS_SECRET = "access_secret";
+const REFRESH_SECRET = "refresh_secret";
 // Время жизни токена
 const ACCESS_EXPIRES_IN = "15m";
+const REFRESH_EXPIRES_IN = "7d";
 
 /**
  * @swagger
@@ -189,6 +191,32 @@ let products = [
     },
 ]
 
+const refreshTokens = new Set();
+function generateAccessToken(user) {
+    return jwt.sign(
+        {
+            sub: user.id,
+            username: user.email,
+        },
+        ACCESS_SECRET,
+        {
+            expiresIn: ACCESS_EXPIRES_IN,
+        }
+    );
+}
+function generateRefreshToken(user) {
+    return jwt.sign(
+        {
+            sub: user.id,
+            username: user.email,
+        },
+        REFRESH_SECRET,
+        {
+            expiresIn: REFRESH_EXPIRES_IN,
+        }
+    );
+}
+
 // Middleware для парсинга JSON
 app.use(express.json());
 
@@ -202,7 +230,7 @@ function authMiddleware(req, res, next) {
         });
     }
     try {
-        const payload = jwt.verify(token, JWT_SECRET);
+        const payload = jwt.verify(token, ACCESS_SECRET);
         // сохраняем данные токена в req
         req.user = payload;
         next();
@@ -347,18 +375,12 @@ app.post("/auth/login", async (req, res) => {
         });
     }
 // Создание access-токена
-    const accessToken = jwt.sign(
-        {
-            sub: user.id,
-            username: user.email,
-        },
-        JWT_SECRET,
-        {
-            expiresIn: ACCESS_EXPIRES_IN,
-        }
-    );
+    const accessToken = generateAccessToken(user);
+    const refreshToken = generateRefreshToken(user);
+    refreshTokens.add(refreshToken)
     res.json({
         accessToken,
+        refreshToken,
         user: {
             id: user.id,
             username: user.email,
@@ -386,6 +408,44 @@ app.get("/auth/me", authMiddleware, (req, res) => {
     });
 });
 
+app.post("/auth/refresh", (req, res) => {
+    const { refreshToken } = req.body;
+    if (!refreshToken) {
+        return res.status(400).json({
+            error: "refreshToken is required",
+        });
+    }
+    if (!refreshTokens.has(refreshToken)) {
+        return res.status(401).json({
+            error: "Invalid refresh token",
+        });
+    }
+    try {
+        const payload = jwt.verify(refreshToken, REFRESH_SECRET);
+        const user = users.find((u) => u.id === payload.sub);
+        if (!user) {
+            return res.status(401).json({
+                error: "User not found",
+            });
+        }
+        // Ротация refresh-токена:
+        // старый удаляем, новый создаём
+        refreshTokens.delete(refreshToken);
+        const newAccessToken = generateAccessToken(user);
+        const newRefreshToken = generateRefreshToken(user);
+        refreshTokens.add(newRefreshToken);
+        res.json({
+            accessToken: newAccessToken,
+            refreshToken: newRefreshToken,
+            refresh_expired: false
+        });
+    } catch (err) {
+        return res.status(401).json({
+            refresh_expired: false,
+            error: "Invalid or expired refresh token",
+    });
+    }
+});
 
 // Middleware для логирования запросов
 app.use((req, res, next) => {

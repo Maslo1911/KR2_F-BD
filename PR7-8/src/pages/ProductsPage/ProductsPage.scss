@@ -211,3 +211,51 @@ $dangerBg: rgba(239, 68, 68, 0.12);
   color: inherit;
   outline: none;
 }
+.search-section {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 0 20px;
+  flex: 1;
+  max-width: 400px;
+}
+
+.search-box {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.search-input {
+  background-color: $panel;
+  color: $text;
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid $border;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.search-input:focus {
+  outline: none;
+}
+
+.search-btn {
+  white-space: nowrap;
+}
+
+.reset-btn {
+  white-space: nowrap;
+}
+
+.search-error {
+  color: #dc3545;
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.search-result-info {
+  color: #28a745;
+  font-size: 12px;
+  margin-top: 2px;
+}

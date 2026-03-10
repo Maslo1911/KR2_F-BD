@@ -4,22 +4,27 @@ import ProductsList from "../../components/ProductsList";
 import ProductModal from "../../components/ProductModal";
 import { api } from "../../api";
 import AuthModal from "../../components/AuthModal";
-export default function ProductsPage() {
+export default function ProductsPage({ user, onLogout }) {
     const [products, setProducts] = useState([]);
-    const [user, setUser] = useState(null);
+    const [filteredProducts, setFilteredProducts] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [searchId, setSearchId] = useState("");
+    const [searchError, setSearchError] = useState("");
+    const [searchResult, setSearchResult] = useState(null);
     const [modalOpen, setModalOpen] = useState(false);
     const [modalMode, setModalMode] = useState("create"); // create | edit
     const [editingProduct, setEditingProduct] = useState(null);
     const [authModalOpen, setAuthModalOpen] = useState(false);
     const [authModalMode, setAuthModalMode] = useState("");
+
     useEffect(() => {
         loadProducts();
-        const savedUser = localStorage.getItem('user');
-        if (savedUser) {
-            setUser(JSON.parse(savedUser));
-        }
         }, []);
+
+    useEffect(() => {
+        setFilteredProducts(products);
+    }, [products]);
+
     const loadProducts = async () => {
         try {
             setLoading(true);
@@ -31,6 +36,46 @@ export default function ProductsPage() {
         } finally {
             setLoading(false);
         }
+    };
+    const handleSearchById = async () => {
+        if (!searchId.trim()) {
+            setSearchError("Введите ID товара");
+            setSearchResult(null);
+            setFilteredProducts(products);
+            return;
+        }
+
+        const id = searchId;
+
+        try {
+            setLoading(true);
+            setSearchError("");
+
+            const localProduct = products.find(p => p.id === id);
+
+            if (localProduct) {
+                setSearchResult(localProduct);
+                setFilteredProducts([localProduct]);
+            } else {
+                const product = await api.getProductById(id);
+                setSearchResult(product);
+                setFilteredProducts([product]);
+            }
+        } catch (err) {
+            console.error(err);
+            setSearchError(`Товар с ID ${id} не найден`);
+            setSearchResult(null);
+            setFilteredProducts(products);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const resetSearch = () => {
+        setSearchId("");
+        setSearchError("");
+        setSearchResult(null);
+        setFilteredProducts(products);
     };
     const openCreate = () => {
         setModalMode("create");
@@ -58,23 +103,32 @@ export default function ProductsPage() {
         setAuthModalMode("");
     };
     const handleLogout = () => {
-        setUser(null);
-        localStorage.removeItem('user');
-        localStorage.removeItem('accessToken');
+        api.logoutUser();
+        onLogout();
     };
     const handleDelete = async (id) => {
         if (!user) {
             alert("Необходимо авторизоваться");
             return;
         }
+
         const ok = window.confirm("Удалить товар?");
         if (!ok) return;
+
         try {
             await api.deleteProduct(id);
             setProducts((prev) => prev.filter((p) => p.id !== id));
+            if (searchResult && searchResult.id === id) {
+                resetSearch();
+            }
         } catch (err) {
             console.error(err);
-            alert("Ошибка удаления товара");
+            if (err.response?.status === 401) {
+                alert("Сессия истекла. Пожалуйста, войдите снова.");
+                handleLogout();
+            } else {
+                alert("Ошибка удаления товара");
+            }
         }
     };
     const handleSubmitModal = async (payload) => {
@@ -114,8 +168,6 @@ export default function ProductsPage() {
             console.log("Response from login:", response);
 
             if (response.user && response.token) {
-                console.log("User data:", response.user);
-                setUser(response.user);
                 closeAuthModal(); // Закрываем окно только после успешного входа
             }
         } catch (err) {
@@ -156,6 +208,40 @@ export default function ProductsPage() {
                 <div className="container">
                     <div className="toolbar">
                         <h1 className="title">Товары</h1>
+                        <div className="search-section">
+                            <div className="search-box">
+                                <input
+                                    type="text"
+                                    placeholder="Поиск по ID товара"
+                                    value={searchId}
+                                    onChange={(e) => setSearchId(e.target.value)}
+                                    onKeyPress={(e) => e.key === 'Enter' && handleSearchById()}
+                                    className="search-input"
+                                />
+                                <button
+                                    className="btn btn--primary search-btn"
+                                    onClick={handleSearchById}
+                                >
+                                    Найти
+                                </button>
+                                {searchResult && (
+                                    <button
+                                        className="btn btn--secondary reset-btn"
+                                        onClick={resetSearch}
+                                    >
+                                        Сбросить
+                                    </button>
+                                )}
+                            </div>
+                            {searchError && (
+                                <div className="search-error">{searchError}</div>
+                            )}
+                            {searchResult && (
+                                <div className="search-result-info">
+                                    Найден товар: {searchResult.name} (ID: {searchResult.id})
+                                </div>
+                            )}
+                        </div>
                         <button className="btn btn--primary" onClick=
                             {openCreate}>
                             + Создать
@@ -163,12 +249,17 @@ export default function ProductsPage() {
                     </div>
                     {loading ? (
                         <div className="empty">Загрузка...</div>
-                    ) : (
+                    ) : filteredProducts.length > 0 ? (
                         <ProductsList
-                            products={products}
+                            products={filteredProducts}
                             onEdit={openEdit}
                             onDelete={handleDelete}
+                            currentUser={user} // Передаем user для проверки прав
                         />
+                    ) : (
+                        <div className="empty">
+                            {searchId ? "Товары не найдены" : "Нет товаров"}
+                        </div>
                     )}
                 </div>
             </main>
