@@ -4,6 +4,7 @@ import ProductsList from "../../components/ProductsList";
 import ProductModal from "../../components/ProductModal";
 import { api } from "../../api";
 import AuthModal from "../../components/AuthModal";
+import AdminPanel from "../../components/AdminPanel";
 export default function ProductsPage({ user, onLogout }) {
     const [products, setProducts] = useState([]);
     const [filteredProducts, setFilteredProducts] = useState([]);
@@ -16,6 +17,7 @@ export default function ProductsPage({ user, onLogout }) {
     const [editingProduct, setEditingProduct] = useState(null);
     const [authModalOpen, setAuthModalOpen] = useState(false);
     const [authModalMode, setAuthModalMode] = useState("");
+    const [showAdminPanel, setShowAdminPanel] = useState(false);
 
     useEffect(() => {
         loadProducts();
@@ -32,6 +34,10 @@ export default function ProductsPage({ user, onLogout }) {
             setProducts(data);
         } catch (err) {
             console.error(err);
+            if (err.response?.status === 401) {
+                alert("Сессия истекла. Пожалуйста, войдите снова.");
+                handleLogout();
+            }
             alert("Ошибка загрузки товаров");
         } finally {
             setLoading(false);
@@ -145,6 +151,10 @@ export default function ProductsPage({ user, onLogout }) {
             closeModal();
         } catch (err) {
             console.error(err);
+            if (err.response?.status === 401) {
+                alert("Сессия истекла. Пожалуйста, войдите снова.");
+                handleLogout();
+            }
             alert("Ошибка сохранения товара");
         }
     };
@@ -203,7 +213,8 @@ export default function ProductsPage({ user, onLogout }) {
                             </>
                         )}
                     </div>
-                </div> </header>
+                </div>
+            </header>
             <main className="main">
                 <div className="container">
                     <div className="toolbar">
@@ -242,11 +253,25 @@ export default function ProductsPage({ user, onLogout }) {
                                 </div>
                             )}
                         </div>
-                        <button className="btn btn--primary" onClick=
-                            {openCreate}>
-                            + Создать
-                        </button>
+                        {user?.role === 'admin' && (
+                            <button
+                                className="btn btn--primary"
+                                onClick={() => setShowAdminPanel(true)}
+                            >
+                                Админ панель
+                            </button>
+                        )}
+                        {user.role === 'seller' && (
+                            <button className="btn btn--primary" onClick={openCreate}>
+                                + Создать
+                            </button>
+                        )}
                     </div>
+                    {showAdminPanel && (
+                        <div className="admin-panel-overlay">
+                            <AdminPanel onClose={() => setShowAdminPanel(false)} />
+                        </div>
+                    )}
                     {loading ? (
                         <div className="empty">Загрузка...</div>
                     ) : filteredProducts.length > 0 ? (
@@ -254,7 +279,7 @@ export default function ProductsPage({ user, onLogout }) {
                             products={filteredProducts}
                             onEdit={openEdit}
                             onDelete={handleDelete}
-                            currentUser={user} // Передаем user для проверки прав
+                            user={user} // Передаем user для проверки прав
                         />
                     ) : (
                         <div className="empty">
@@ -269,15 +294,15 @@ export default function ProductsPage({ user, onLogout }) {
                 </div>
             </footer>
             <ProductModal open={modalOpen}
-                       mode={modalMode}
-                       initialProduct={editingProduct}
-                       onClose={closeModal}
-                       onSubmit={handleSubmitModal}
+                          mode={modalMode}
+                          initialProduct={editingProduct}
+                          onClose={closeModal}
+                          onSubmit={handleSubmitModal}
             />
             <AuthModal open={authModalOpen}
-                          mode={authModalMode}
-                          onClose={closeAuthModal}
-                          onSubmit={handleSubmitAuthModal}
+                       mode={authModalMode}
+                       onClose={closeAuthModal}
+                       onSubmit={handleSubmitAuthModal}
             />
-        </div> );
+        </div>);
 }

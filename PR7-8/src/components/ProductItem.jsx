@@ -1,5 +1,5 @@
 import React from "react";
-export default function productItem({ product, onEdit, onDelete }) {
+export default function productItem({ product, user, onEdit, onDelete }) {
     return (
         <div className="productRow">
             <div className="productMain">
@@ -11,13 +11,17 @@ export default function productItem({ product, onEdit, onDelete }) {
                 <div className="productCost">{product.cost} рублей</div>
             </div>
             <div className="productActions">
-                <button className="btn" onClick={() => onEdit(product)}>
-                    Редактировать
-                </button>
-                <button className="btn btn--danger" onClick={() =>
-                    onDelete(product.id)}>
-                    Удалить
-                </button>
+                {(user?.role === "seller" || user?.role === "admin") && (
+                    <button className="btn" onClick={() => onEdit(product)}>
+                        Редактировать
+                    </button>
+                )}
+                {user?.role === "admin" && (
+                    <button className="btn btn--danger" onClick={() =>
+                        onDelete(product.id)}>
+                        Удалить
+                    </button>
+                )}
             </div>
         </div>
     );

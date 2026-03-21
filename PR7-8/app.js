@@ -38,8 +38,8 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 const ACCESS_SECRET = "access_secret";
 const REFRESH_SECRET = "refresh_secret";
 // Время жизни токена
-const ACCESS_EXPIRES_IN = "15m";
-const REFRESH_EXPIRES_IN = "7d";
+const ACCESS_EXPIRES_IN = "5m";
+const REFRESH_EXPIRES_IN = "10m";
 
 /**
  * @swagger
@@ -197,6 +197,7 @@ function generateAccessToken(user) {
         {
             sub: user.id,
             username: user.email,
+            role: user.role
         },
         ACCESS_SECRET,
         {
@@ -209,6 +210,7 @@ function generateRefreshToken(user) {
         {
             sub: user.id,
             username: user.email,
+            role: user.role
         },
         REFRESH_SECRET,
         {
@@ -240,8 +242,45 @@ function authMiddleware(req, res, next) {
         });
     }
 }
+function roleMiddleware(allowedRoles) {
+    return (req, res, next) => {
+        if (!req.user || !allowedRoles.includes(req.user.role)) {
+            return res.status(403).json({
+                error: "Forbidden",
+            });
+        }
+        next();
+    };
+}
 
+// Инициализация пользователей
+async function initializeUsers() {
+    const adminPassword = await bcrypt.hash("admin", 10);
+    const sellerPassword = await bcrypt.hash("seller", 10);
+
+    users = [
+        {
+            id: "0",
+            email: "admin@admin",
+            first_name: "admin",
+            last_name: "admin",
+            hashedPassword: adminPassword,
+            role: "admin"
+        },
+        {
+            id: "1",
+            email: "seller@seller",
+            first_name: "Иван",
+            last_name: "Иванов",
+            hashedPassword: sellerPassword,
+            role: "seller"
+        },
+    ];
+}
+
+// Запускаем инициализацию
 let users = [];
+initializeUsers().catch(console.error);
 
 function findUserOr404(email, res) {
     const user = users.find(u => u.email === email);
@@ -310,7 +349,8 @@ app.post("/auth/register", async (req, res) => {
             email: email,
             first_name: first_name,
             last_name: last_name,
-            hashedPassword: await hashPassword(password)
+            hashedPassword: await hashPassword(password),
+            role: "user"
         };
         users.push(newUser);
         res.status(201).json(newUser);
@@ -385,7 +425,8 @@ app.post("/auth/login", async (req, res) => {
             id: user.id,
             username: user.email,
             first_name: user.first_name,
-            last_name: user.last_name
+            last_name: user.last_name,
+            role: user.role
         }
     });
 });
@@ -405,6 +446,7 @@ app.get("/auth/me", authMiddleware, (req, res) => {
         first_name: user.first_name,
         last_name: user.last_name,
         username: user.email,
+        role: user.role
     });
 });
 
@@ -507,7 +549,7 @@ app.get('/', (req, res) => {
  *               $ref: '#/components/schemas/Product'
  */
 
-app.post('/products', (req, res) => {
+app.post('/products', authMiddleware, roleMiddleware(["seller"]), (req, res) => {
     const { name, cost, category, description, quantity } = req.body;
     const newProduct = {
         id: nanoid(6),
@@ -520,7 +562,7 @@ app.post('/products', (req, res) => {
     products.push(newProduct);
     res.status(201).json(newProduct);
 });
-app.get('/products', (req, res) => {
+app.get('/products', authMiddleware, roleMiddleware(["user", "seller", "admin"]), (req, res) => {
     res.json(products);
 });
 
@@ -586,13 +628,13 @@ app.get('/products', (req, res) => {
  *         description: Товар не найден
  */
 
-app.get('/products/:id', authMiddleware, (req, res) => {
+app.get('/products/:id', authMiddleware, roleMiddleware(["user", "seller", "admin"]), (req, res) => {
     const id = req.params.id;
     const product = findProductOr404(id, res);
     if (!product) return;
     res.json(product);
 });
-app.put('/products/:id', authMiddleware, (req, res) => {
+app.put('/products/:id', authMiddleware, roleMiddleware(["seller", "admin"]), (req, res) => {
 
     const id = req.params.id;
     const product = findProductOr404(id, res);
@@ -614,12 +656,109 @@ app.put('/products/:id', authMiddleware, (req, res) => {
 
     res.json(product);
 });
-app.delete('/products/:id', authMiddleware, (req, res) => {
+app.delete('/products/:id', authMiddleware, roleMiddleware(["admin"]), (req, res) => {
     const id = req.params.id;
     const exists = products.some((p) => p.id === id);
     if (!exists) return res.status(404).json({ error: "product not found" });
     products = products.filter((p) => p.id !== id);
     // Правильнее 204 без тела
+    res.status(204).send();
+});
+
+// ============= АДМИН ПАНЕЛЬ - УПРАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯМИ =============
+
+// Получить всех пользователей (только для админа)
+app.get('/admin/users', authMiddleware, roleMiddleware(["admin"]), (req, res) => {
+    // Возвращаем пользователей без паролей
+    const usersWithoutPasswords = users.map(user => {
+        const { hashedPassword, ...userWithoutPassword } = user;
+        return userWithoutPassword;
+    });
+    res.json(usersWithoutPasswords);
+});
+
+// Получить пользователя по ID (только для админа)
+app.get('/admin/users/:id', authMiddleware, roleMiddleware(["admin"]), (req, res) => {
+    const userId = req.params.id;
+    const user = users.find(u => u.id === userId);
+
+    if (!user) {
+        return res.status(404).json({ error: "User not found" });
+    }
+
+    const { hashedPassword, ...userWithoutPassword } = user;
+    res.json(userWithoutPassword);
+});
+
+// Создать пользователя (только для админа)
+app.post('/admin/users', authMiddleware, roleMiddleware(["admin"]), async (req, res) => {
+    const { email, first_name, last_name, password, role } = req.body;
+
+    if (!email || !first_name || !last_name || !password) {
+        return res.status(400).json({ error: "All fields are required" });
+    }
+
+    // Проверяем, существует ли пользователь
+    const existingUser = users.find(u => u.email === email);
+    if (existingUser) {
+        return res.status(400).json({ error: "User already exists" });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const newUser = {
+        id: nanoid(6),
+        email,
+        first_name,
+        last_name,
+        hashedPassword,
+        role: role || "user"
+    };
+
+    users.push(newUser);
+
+    const { hashedPassword: _, ...userWithoutPassword } = newUser;
+    res.status(201).json(userWithoutPassword);
+});
+
+// Обновить пользователя (только для админа)
+app.put('/admin/users/:id', authMiddleware, roleMiddleware(["admin"]), async (req, res) => {
+    const userId = req.params.id;
+    const user = users.find(u => u.id === userId);
+
+    if (!user) {
+        return res.status(404).json({ error: "User not found" });
+    }
+
+    const { email, first_name, last_name, role, password } = req.body;
+
+    if (email) user.email = email;
+    if (first_name) user.first_name = first_name;
+    if (last_name) user.last_name = last_name;
+    if (role) user.role = role;
+    if (password) {
+        user.hashedPassword = await bcrypt.hash(password, 10);
+    }
+
+    const { hashedPassword, ...userWithoutPassword } = user;
+    res.json(userWithoutPassword);
+});
+
+// Удалить пользователя (только для админа)
+app.delete('/admin/users/:id', authMiddleware, roleMiddleware(["admin"]), (req, res) => {
+    const userId = req.params.id;
+    const userIndex = users.findIndex(u => u.id === userId);
+
+    if (userIndex === -1) {
+        return res.status(404).json({ error: "User not found" });
+    }
+
+    // Нельзя удалить самого себя
+    if (userId === req.user.sub) {
+        return res.status(400).json({ error: "Cannot delete yourself" });
+    }
+
+    users.splice(userIndex, 1);
     res.status(204).send();
 });
 

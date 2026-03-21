@@ -30,6 +30,7 @@ apiClient.interceptors.response.use(
             if (!accessToken || !refreshToken) {
                 localStorage.removeItem('accessToken');
                 localStorage.removeItem('refreshToken');
+                window.dispatchEvent(new CustomEvent('auth:logout'));
                 return Promise.reject(error);
             }
             try {
@@ -38,6 +39,7 @@ apiClient.interceptors.response.use(
                 if (isRefreshExpired) {
                     localStorage.removeItem('accessToken');
                     localStorage.removeItem('refreshToken');
+                    window.dispatchEvent(new CustomEvent('auth:logout'));
                     return Promise.reject(error);
                 }
                 let newAccessToken = response.data.accessToken;
@@ -50,6 +52,7 @@ apiClient.interceptors.response.use(
             catch (refreshError) {
                 localStorage.removeItem('accessToken');
                 localStorage.removeItem('refreshToken');
+                window.dispatchEvent(new CustomEvent('auth:logout'));
                 return Promise.reject(refreshError);
             }
         }
@@ -122,13 +125,16 @@ export const api = {
         return response.data;
     },
 
-    refresh: async (refreshToken) => {
+    refresh: async (refreshToken, accessToken) => {
         return await apiClient.post("/auth/refresh", {
-            refreshToken: refreshToken
+            accessToken: accessToken,
+            refreshToken: refreshToken,
+            refresh_expired: false
         });
     },
     logoutUser: () => {
         localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
         localStorage.removeItem('user');
     },
 
@@ -138,5 +144,30 @@ export const api = {
     },
     getToken: () => {
         return localStorage.getItem('accessToken');
-    }
+    },
+    // Админ панель
+    getAdminUsers: async () => {
+        const response = await apiClient.get("/admin/users");
+        return response.data;
+    },
+
+    getAdminUserById: async (id) => {
+        const response = await apiClient.get(`/admin/users/${id}`);
+        return response.data;
+    },
+
+    createAdminUser: async (userData) => {
+        const response = await apiClient.post("/admin/users", userData);
+        return response.data;
+    },
+
+    updateAdminUser: async (id, userData) => {
+        const response = await apiClient.put(`/admin/users/${id}`, userData);
+        return response.data;
+    },
+
+    deleteAdminUser: async (id) => {
+        const response = await apiClient.delete(`/admin/users/${id}`);
+        return response.data;
+    },
 }
