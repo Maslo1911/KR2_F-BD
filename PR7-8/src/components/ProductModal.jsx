@@ -7,6 +7,7 @@ export default function ProductModal({ open, mode, initialProduct, onClose, onSu
     const [category, setCategory] = useState("");
     const [description, setDescription] = useState("");
     const [quantity, setQuantity] = useState("");
+    const [image, setImage] = useState("");
 
     useEffect(() => {
         if (!open) return;
@@ -16,6 +17,7 @@ export default function ProductModal({ open, mode, initialProduct, onClose, onSu
         setCategory(initialProduct?.category ?? "");
         setDescription(initialProduct?.description ?? "");
         setQuantity(initialProduct?.quantity != null ? String(initialProduct.quantity) : "");
+        setImage(initialProduct?.image != null ? String(initialProduct.image) : "")
     }, [open, initialProduct]);
 
     if (!open) return null;
@@ -50,7 +52,8 @@ export default function ProductModal({ open, mode, initialProduct, onClose, onSu
             cost: parsedCost,
             category: category.trim(),
             description: description.trim(),
-            quantity: parsedQuantity
+            quantity: parsedQuantity,
+            image: image !== ""? image : "https://rusles-35.ru/bitrix/templates/rusles_new/img/icon/no-photo.png"
         });
     };
 
@@ -89,6 +92,10 @@ export default function ProductModal({ open, mode, initialProduct, onClose, onSu
                             <input className="input" value={quantity} onChange={(e) => setQuantity(e.target.value)} inputMode="numeric" />
                         </label>
                     </div>
+                    <label className="label">
+                        URL фото
+                        <input className="input" value={image} onChange={(e) => setImage(e.target.value)} />
+                    </label>
 
                     <div className="modal__footer">
                         <button type="button" className="btn" onClick={onClose}>Отмена</button>

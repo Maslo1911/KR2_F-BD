@@ -115,7 +115,8 @@ let products = [
         description: "Отличные наушники с активным шумоподавлением",
         name: 'AirPods',
         cost: 20000,
-        quantity: 100
+        quantity: 100,
+        image: "https://rusles-35.ru/bitrix/templates/rusles_new/img/icon/no-photo.png"
     },
     {
         id: nanoid(6),
@@ -123,7 +124,8 @@ let products = [
         description: "Мощный смартфон нового поколения для любых задач",
         name: 'Samsung Galaxy S24',
         cost: 40000,
-        quantity: 50
+        quantity: 50,
+        image: "https://rusles-35.ru/bitrix/templates/rusles_new/img/icon/no-photo.png"
     },
     {
         id: nanoid(6),
@@ -131,7 +133,8 @@ let products = [
         description: "Силиконовый чехол отлично защитить ваш телефон",
         name: 'Чехол для Samsung Galaxy S24',
         cost: 3000,
-        quantity: 200
+        quantity: 200,
+        image: "https://rusles-35.ru/bitrix/templates/rusles_new/img/icon/no-photo.png"
     },
     {
         id: nanoid(6),
@@ -139,7 +142,8 @@ let products = [
         description: "Силиконовый чехол отлично защитить ваш телефон",
         name: 'Чехол для iPhone 15',
         cost: 5000,
-        quantity: 150
+        quantity: 150,
+        image: "https://rusles-35.ru/bitrix/templates/rusles_new/img/icon/no-photo.png"
     },
     {
         id: nanoid(6),
@@ -147,7 +151,8 @@ let products = [
         description: "Самый приятный и удобный смартфон на рынке",
         name: 'iPhone 15',
         cost: 50000,
-        quantity: 10
+        quantity: 10,
+        image: "https://rusles-35.ru/bitrix/templates/rusles_new/img/icon/no-photo.png"
     },
     {
         id: nanoid(6),
@@ -155,7 +160,8 @@ let products = [
         description: "Наушники для тех, кто ценит идеальный звук",
         name: 'Marshall Major IV',
         cost: 15000,
-        quantity: 30
+        quantity: 30,
+        image: "https://rusles-35.ru/bitrix/templates/rusles_new/img/icon/no-photo.png"
     },
     {
         id: nanoid(6),
@@ -163,7 +169,8 @@ let products = [
         description: "Выгодный баланс размера и мощности",
         name: 'iPad 5',
         cost: 25000,
-        quantity: 20
+        quantity: 20,
+        image: "https://rusles-35.ru/bitrix/templates/rusles_new/img/icon/no-photo.png"
     },
     {
         id: nanoid(6),
@@ -171,7 +178,8 @@ let products = [
         description: "Погружение в игры нового поколения с 4K",
         name: 'PlayStation 5 Slim',
         cost: 55000,
-        quantity: 8
+        quantity: 8,
+        image: "https://rusles-35.ru/bitrix/templates/rusles_new/img/icon/no-photo.png"
     },
     {
         id: nanoid(6),
@@ -179,7 +187,8 @@ let products = [
         description: "Изогнутый экран 144Гц для геймеров и дизайнеров",
         name: 'Samsung Odyssey G5',
         cost: 28000,
-        quantity: 12
+        quantity: 12,
+        image: "https://rusles-35.ru/bitrix/templates/rusles_new/img/icon/no-photo.png"
     },
     {
         id: nanoid(6),
@@ -187,7 +196,8 @@ let products = [
         description: "Компактная беззеркалка для ведения влогов",
         name: 'Sony ZV-E10',
         cost: 72000,
-        quantity: 5
+        quantity: 5,
+        image: "https://rusles-35.ru/bitrix/templates/rusles_new/img/icon/no-photo.png"
     },
 ]
 
@@ -550,14 +560,15 @@ app.get('/', (req, res) => {
  */
 
 app.post('/products', authMiddleware, roleMiddleware(["seller"]), (req, res) => {
-    const { name, cost, category, description, quantity } = req.body;
+    const { name, cost, category, description, quantity, image } = req.body;
     const newProduct = {
         id: nanoid(6),
         name: name ? name.trim() : "Без названия",
         cost: Number(cost) || 0,
         category: category || "Общее",
         description: description || "",
-        quantity: Number(quantity) || 0
+        quantity: Number(quantity) || 0,
+        image: image ? image : "https://rusles-35.ru/bitrix/templates/rusles_new/img/icon/no-photo.png"
     };
     products.push(newProduct);
     res.status(201).json(newProduct);
@@ -641,7 +652,7 @@ app.put('/products/:id', authMiddleware, roleMiddleware(["seller", "admin"]), (r
     if (!product) return;
 
     // Проверяем наличие хотя бы одного поля для обновления
-    const { name, cost, category, description, quantity } = req.body;
+    const { name, cost, category, description, quantity, image } = req.body;
 
     if (!name && cost === undefined && !category && !description && quantity === undefined) {
         return res.status(400).json({ error: "Nothing to update" });
@@ -653,6 +664,7 @@ app.put('/products/:id', authMiddleware, roleMiddleware(["seller", "admin"]), (r
     if (category !== undefined) product.category = category;
     if (description !== undefined) product.description = description;
     if (quantity !== undefined) product.quantity = Number(quantity);
+    if (image !== undefined) product.image = image;
 
     res.json(product);
 });

@@ -2,6 +2,9 @@ import React from "react";
 export default function productItem({ product, user, onEdit, onDelete }) {
     return (
         <div className="productRow">
+            <div className="productImage">
+                <img src={product.image} alt={product.name}/>
+            </div>
             <div className="productMain">
                 <div className="productId">#{product.id}</div>
                 <div className="productName">{product.name}</div>

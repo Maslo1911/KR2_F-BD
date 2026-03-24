@@ -102,12 +102,27 @@ $dangerBg: rgba(239, 68, 68, 0.12);
   gap: 12px;
   padding: 12px;
 }
+.productImage {
+  width: 200px;        /* Фиксированная ширина контейнера */
+  height: 170px;
+  overflow: hidden;    /* Обрезает всё, что выходит за границы */
+  border-radius: 8px;
+  background-color: white;
+}
+
+.productImage img {
+  width: 100%;         /* Картинка занимает всю ширину контейнера */
+  height: 100%;        /* И всю высоту */
+  object-fit: contain;
+}
 .productMain {
   display: grid;
   grid-template-columns: max-content 1fr;
   align-items: start;
   gap: 12px;
   flex-wrap: wrap;
+  flex: 1;
+  min-width: 0;
   .productId {
     grid-column: span 2;
     opacity: 0.6;
